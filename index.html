@@ -620,6 +620,7 @@
         });
 
         let currentFile = null;
+        let currentDataUrl = null;
         let isProcessing = false;
         let lastAnalysisText = '';
 
@@ -691,7 +692,8 @@
             // 預覽圖片
             const reader = new FileReader();
             reader.onload = (e) => {
-                previewImg.src = e.target.result;
+                currentDataUrl = e.target.result;
+                previewImg.src = currentDataUrl;
                 previewImg.style.display = 'block';
                 placeholder.style.display = 'none';
                 startAnalysis(file);
@@ -761,21 +763,25 @@
 
             try {
                 if (typeof vibe === 'undefined' || !vibe.vision) {
-                    throw new Error('未檢測到 platform vibe.vision API 環境');
+                    throw new Error('未檢測到平台 vibe.vision API 環境，請確認工具於正確平台環境執行');
                 }
 
-                const result = await vibe.vision(userPrompt, file, { apiKey: apiKey, detail: 'high' });
+                // 優先傳遞已轉換完成之 base64 DataURL 或 File 物件，提升沙箱環境相容性
+                const imagePayload = currentDataUrl || file;
+                const result = await vibe.vision(userPrompt, imagePayload, { apiKey: apiKey, detail: 'high' });
                 
-                if (result && result.trim()) {
+                if (result && typeof result === 'string' && result.trim()) {
                     lastAnalysisText = result.trim();
                     resultBox.textContent = lastAnalysisText;
                     copyBtn.style.display = 'inline-flex';
+                    clearError();
                 } else {
-                    throw new Error('無法辨識內容或未取得結果');
+                    throw new Error('無法辨識發票內容或回傳結果為空');
                 }
             } catch (err) {
-                console.error(err);
-                showError('辨識失敗：' + (err.message || '請檢查 API Key 是否正確或用量是否超限'));
+                console.error('Vision API 呼叫錯誤：', err);
+                const errMsg = err && err.message ? err.message : String(err);
+                showError('辨識失敗：' + errMsg);
                 resultBox.classList.add('placeholder');
                 resultBox.textContent = '結果顯示於此';
             } finally {
