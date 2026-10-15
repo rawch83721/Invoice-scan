@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8"><script>/* Vibe offline SDK stub */(function () {
+  if (window.vibe) return;
+
+  var HINT = '（此檔為單機版，沒有連上 Vibe 平台。需要這個功能請回平台開啟這支工具。）';
+
+  function unavailable(what) {
+    return function () {
+      var msg = '單機版無法使用「' + what + '」' + HINT;
+      console.error('[Vibe 單機版]', msg);
+      return Promise.reject(new Error(msg));
+    };
+  }
+
+  var query      = unavailable('工具資料庫查詢 vibe.query');
+  var exec       = unavailable('工具資料庫寫入 vibe.exec');
+  var execMany   = unavailable('工具資料庫批次寫入 vibe.execMany');
+  var queryTool  = unavailable('跨工具讀取 vibe.queryTool');
+  var execTool   = unavailable('跨工具寫入 vibe.execTool');
+  var uploadFile = unavailable('檔案上傳 vibe.uploadFile');
+  var fileUrl    = unavailable('雲端檔案 vibe.fileUrl');
+  var thumbUrl   = unavailable('雲端檔案縮圖 vibe.thumbUrl');
+  var imgSrc     = unavailable('雲端圖片網址 vibe.imgSrc');
+  var deleteFile = unavailable('檔案刪除 vibe.deleteFile');
+  var ai         = unavailable('AI 服務台 vibe.ai');
+  var vision     = unavailable('AI 圖片辨識 vibe.vision');
+  var people     = unavailable('公司通訊錄查詢 vibe.people');
+  var peopleAll  = unavailable('公司通訊錄整份撈取 vibe.peopleAll');
+  var sendMail   = unavailable('寄信 vibe.sendMail');
+
+  // 同步 API：回佔位物件，形狀與平台版一致（見 vibe-sdk.ts 的 user()）
+  var warnedUser = false;
+  var user = function () {
+    if (!warnedUser) {
+      warnedUser = true;
+      console.warn('[Vibe 單機版] 取不到登入者資訊' + HINT);
+    }
+    return { username: null, name: '（單機版）', oid: null, emp_no: null };
+  };
+
+  // 平台版會 URL.revokeObjectURL；單機版沒有 blob URL 可收，安全的 no-op
+  var revokeUrl = function () {};
+
+  window.vibe = {
+    query: query, exec: exec, execMany: execMany, queryTool: queryTool, execTool: execTool,
+    user: user,
+    uploadFile: uploadFile, fileUrl: fileUrl, thumbUrl: thumbUrl, imgSrc: imgSrc,
+    deleteFile: deleteFile, revokeUrl: revokeUrl,
+    ai: ai, vision: vision, people: people, peopleAll: peopleAll, sendMail: sendMail
+  };
+
+  // POC 相容的 VP namespace（平台版也提供，見 vibe-sdk.ts）
+  window.VP = {
+    db: { query: query, exec: exec, execMany: execMany },
+    user: user,
+    uploadFile: uploadFile, fileUrl: fileUrl, thumbUrl: thumbUrl, imgSrc: imgSrc,
+    deleteFile: deleteFile,
+    ai: ai, vision: vision, people: people, peopleAll: peopleAll, sendMail: sendMail
+  };
+})();</script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>國外發票內容分析器</title>
+    <style>
+        :root {
+            --slate-50: #f8fafc;
+            --slate-100: #f1f5f9;
+            --slate-200: #e2e8f0;
+            --slate-300: #cbd5e1;
+            --slate-400: #94a3b8;
+            --slate-500: #64748b;
+            --slate-600: #475569;
+            --slate-700: #334155;
+            --slate-800: #1e293b;
+            --slate-900: #0f172a;
+            --blue-500: #3b82f6;
+            --blue-600: #2563eb;
+            --blue-50: #eff6ff;
+            --emerald-500: #10b981;
+            --emerald-600: #059669;
+            --emerald-50: #ecfdf5;
+            --red-50: #fef2f2;
+            --red-500: #ef4444;
+            --red-600: #dc2626;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, "Noto Sans TC", "Microsoft JhengHei", sans-serif;
+            background-color: var(--slate-50);
+            color: var(--slate-900);
+            min-height: 100vh;
+            padding: 16px;
+            padding-bottom: calc(16px + env(safe-area-inset-bottom));
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            margin-top: 12px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--slate-800);
+            margin-bottom: 6px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--slate-500);
+            font-style: italic;
+        }
+
+        /* API Key 區塊 */
+        .key-bar {
+            background: #ffffff;
+            border: 1px solid var(--slate-200);
+            border-radius: 14px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+        }
+
+        .key-bar label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--slate-700);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .key-input-wrapper {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .key-input {
+            width: 100%;
+            height: 42px;
+            padding: 0 12px;
+            font-size: 16px;
+            border: 1px solid var(--slate-300);
+            border-radius: 8px;
+            background: var(--slate-50);
+            color: var(--slate-800);
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .key-input:focus {
+            border-color: var(--blue-500);
+            background: #fff;
+        }
+
+        .key-hint {
+            font-size: 12px;
+            color: var(--slate-400);
+            width: 100%;
+            margin-top: -4px;
+        }
+
+        /* 網格佈局 */
+        .main-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .card {
+            background: #ffffff;
+            border-radius: 16px;
+            padding: 20px;
+            border: 1px solid var(--slate-200);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            display: flex;
+            flex-col: column;
+            flex-direction: column;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--slate-700);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .icon-svg {
+            width: 18px;
+            height: 18px;
+            stroke-width: 2;
+            stroke: currentColor;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        /* 上傳框 */
+        .dropzone {
+            aspect-ratio: 4 / 4.8;
+            border: 2px dashed var(--slate-200);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            cursor: pointer;
+            overflow: hidden;
+            background: #fff;
+            transition: all 0.2s ease;
+        }
+
+        .dropzone:active {
+            transform: scale(0.99);
+        }
+
+        .dropzone.drag-over {
+            border-color: var(--blue-500);
+            background: var(--blue-50);
+        }
+
+        .dropzone.loading {
+            cursor: wait;
+            opacity: 0.7;
+            background: var(--slate-50);
+            pointer-events: none;
+        }
+
+        .preview-img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        .placeholder-box {
+            text-align: center;
+            padding: 16px;
+        }
+
+        .placeholder-icon {
+            width: 48px;
+            height: 48px;
+            color: var(--slate-300);
+            margin: 0 auto 10px;
+        }
+
+        .placeholder-text {
+            color: var(--slate-400);
+            font-size: 14px;
+        }
+
+        .btn-status {
+            width: 100%;
+            min-height: 44px;
+            margin-top: 16px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            border: 1px solid transparent;
+            cursor: default;
+        }
+
+        .btn-status.idle {
+            border-color: var(--slate-200);
+            color: var(--slate-400);
+            opacity: 0.8;
+            background: transparent;
+        }
+
+        .btn-status.loading {
+            background: var(--slate-100);
+            color: var(--slate-500);
+        }
+
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 複製按鈕 */
+        .btn-copy {
+            min-height: 36px;
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--slate-100);
+            color: var(--slate-600);
+            transition: all 0.15s;
+        }
+
+        .btn-copy:hover {
+            background: var(--slate-200);
+        }
+
+        .btn-copy.copied {
+            background: var(--emerald-500);
+            color: #ffffff;
+        }
+
+        /* 錯誤訊息 */
+        .error-banner {
+            background: var(--red-50);
+            color: var(--red-600);
+            padding: 12px 14px;
+            border-radius: 10px;
+            font-size: 13px;
+            border: 1px solid #fee2e2;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        /* 報表展示區 */
+        .terminal-box {
+            flex: 1;
+            min-height: 340px;
+            background: var(--slate-900);
+            color: var(--slate-200);
+            padding: 16px;
+            border-radius: 12px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+            font-size: 13px;
+            overflow: auto;
+            white-space: pre-wrap;
+            line-height: 1.7;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .terminal-box.placeholder {
+            color: var(--slate-500);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>國外發票內容分析器</h1>
+            <p class="subtitle">支援點擊上傳、相簿選取或貼上圖片（Ctrl+V）</p>
+        </header>
+
+        <!-- API Key 設定列 -->
+        <div class="key-bar">
+            <label for="apiKeyInput">
+                <svg class="icon-svg" style="color:var(--blue-500);" viewBox="0 0 24 24">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                AI API Key
+            </label>
+            <div class="key-input-wrapper">
+                <input type="password" id="apiKeyInput" class="key-input" placeholder="請填入你的 ak-xxxx" autocomplete="off" />
+            </div>
+            <div class="key-hint">※ 請在此輸入公司 AI API Key，金鑰僅儲存於記憶體，重開需再填。</div>
+        </div>
+
+        <div class="main-grid">
+            <!-- 發票照片卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <svg class="icon-svg" style="color:var(--blue-500);" viewBox="0 0 24 24">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        發票照片
+                    </h2>
+                </div>
+
+                <div id="dropzone" class="dropzone">
+                    <div id="placeholder" class="placeholder-box">
+                        <svg class="placeholder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="17 8 12 3 7 8"></polyline>
+                            <line x1="12" y1="3" x2="12" y2="15"></line>
+                        </svg>
+                        <p class="placeholder-text">點擊選取、拍攝或貼上發票</p>
+                    </div>
+                    <img id="previewImg" class="preview-img" style="display:none;" alt="發票預覽" />
+                </div>
+
+                <input type="file" id="fileInput" accept="image/*" style="display:none;" />
+
+                <div id="statusBtn" class="btn-status idle">
+                    <svg class="icon-svg" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="9 12 12 15 16 10"></polyline>
+                    </svg>
+                    <span>等待照片</span>
+                </div>
+            </div>
+
+            <!-- 分析報表卡片 -->
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">
+                        <svg class="icon-svg" style="color:var(--emerald-500);" viewBox="0 0 24 24">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                        </svg>
+                        分析報表
+                    </h2>
+                    <button id="copyBtn" class="btn-copy" style="display:none;" type="button">
+                        <svg class="icon-svg" id="copyIcon" viewBox="0 0 24 24">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                        <span id="copyText">複製</span>
+                    </button>
+                </div>
+
+                <div id="errorBanner" class="error-banner" style="display:none;">
+                    <svg class="icon-svg" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                    </svg>
+                    <span id="errorMsg">辨識失敗</span>
+                </div>
+
+                <div id="resultBox" class="terminal-box placeholder">結果顯示於此</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const apiKeyInput = document.getElementById('apiKeyInput');
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('fileInput');
+        const previewImg = document.getElementById('previewImg');
+        const placeholder = document.getElementById('placeholder');
+        const statusBtn = document.getElementById('statusBtn');
+        const resultBox = document.getElementById('resultBox');
+        const copyBtn = document.getElementById('copyBtn');
+        const copyText = document.getElementById('copyText');
+        const errorBanner = document.getElementById('errorBanner');
+        const errorMsg = document.getElementById('errorMsg');
+
+        let currentFile = null;
+        let isProcessing = false;
+        let lastAnalysisText = '';
+
+        // 點擊觸發檔案選擇
+        dropzone.addEventListener('click', () => {
+            if (!isProcessing) fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files[0]) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // 拖曳處理
+        dropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!isProcessing) dropzone.classList.add('drag-over');
+        });
+
+        dropzone.addEventListener('dragleave', () => {
+            dropzone.classList.remove('drag-over');
+        });
+
+        dropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropzone.classList.remove('drag-over');
+            if (isProcessing) return;
+            if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        // 剪貼簿貼上監聽
+        window.addEventListener('paste', (e) => {
+            if (isProcessing) return;
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        handleFile(file);
+                        break;
+                    }
+                }
+            }
+        });
+
+        function showError(msg) {
+            errorMsg.textContent = msg;
+            errorBanner.style.display = 'flex';
+        }
+
+        function clearError() {
+            errorBanner.style.display = 'none';
+        }
+
+        function handleFile(file) {
+            if (!file) return;
+            if (!file.type.startsWith('image/')) {
+                showError('不支援的格式，請上傳或貼上圖片檔案');
+                return;
+            }
+
+            clearError();
+            currentFile = file;
+
+            // 預覽圖片
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                previewImg.src = e.target.result;
+                previewImg.style.display = 'block';
+                placeholder.style.display = 'none';
+                startAnalysis(file);
+            };
+            reader.onerror = () => {
+                showError('檔案讀取失敗');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        async function startAnalysis(file) {
+            const apiKey = apiKeyInput.value.trim();
+            if (!apiKey) {
+                showError('請先在上方填入你的 AI API Key 後再進行分析');
+                apiKeyInput.focus();
+                return;
+            }
+
+            isProcessing = true;
+            dropzone.classList.add('loading');
+            statusBtn.className = 'btn-status loading';
+            statusBtn.innerHTML = `
+                <svg class="icon-svg spinner" viewBox="0 0 24 24">
+                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg>
+                <span>分析中…</span>
+            `;
+
+            resultBox.classList.remove('placeholder');
+            resultBox.textContent = '發票辨識處理中，請稍候…';
+            copyBtn.style.display = 'none';
+
+            const systemPrompt = `你是一個專業的發票分析助手。分析照片內容並輸出，嚴禁使用數字編號。
+
+首行格式：店名(中文翻譯) YYYY/MM/DD
+（店名若非英文，括號補上中文翻譯；純英文則不需翻譯。嚴禁出現「商店名稱」和「消費日期」字樣）
+
+[免稅商品]
+格式：原文品名(繁體中文翻譯) : 貨幣符號 金額*數量
+
+[應稅商品]
+格式：原文品名(繁體中文翻譯) : 貨幣符號 金額*數量
+
+未稅總額 : 貨幣符號 金額
+免稅額 : 貨幣符號 金額
+含稅總額 : 貨幣符號 金額
+實際支付總額 : 貨幣符號 金額
+
+關鍵規則：
+1. 每個商品品名後方必須括號標註精確的繁體中文翻譯。
+2. 貨幣僅顯示符號。
+3. 法國發票的 T.V.A. 對應至「免稅額」。
+4. 未稅總額對應「小計」或「Subtotal」或「Montant H.T.」。
+5. 運算規則：未稅總額 + 免稅額 = 含稅總額。
+6. 若該發票為完全免稅（免稅額為0或標註免稅且未稅總額等於支付額），含稅總額後方保留空白。
+7. 數字保留千分位，僅輸出分析內容。`;
+
+            const userPrompt = `${systemPrompt}\n\n辨識這張發票。所有商品名稱必須翻譯成繁體中文。T.V.A.為免稅額，請確保 未稅總額+免稅額=含稅總額。完全免稅時含稅總額空白。請直接依格式輸出發票分析結果。`;
+
+            try {
+                if (typeof vibe === 'undefined' || !vibe.vision) {
+                    throw new Error('未檢測到 platform vibe.vision API 環境');
+                }
+
+                const result = await vibe.vision(userPrompt, file, { apiKey: apiKey, detail: 'high' });
+                
+                if (result && result.trim()) {
+                    lastAnalysisText = result.trim();
+                    resultBox.textContent = lastAnalysisText;
+                    copyBtn.style.display = 'inline-flex';
+                } else {
+                    throw new Error('無法辨識內容或未取得結果');
+                }
+            } catch (err) {
+                console.error(err);
+                showError('辨識失敗：' + (err.message || '請檢查 API Key 是否正確或用量是否超限'));
+                resultBox.classList.add('placeholder');
+                resultBox.textContent = '結果顯示於此';
+            } finally {
+                isProcessing = false;
+                dropzone.classList.remove('loading');
+                statusBtn.className = 'btn-status idle';
+                statusBtn.innerHTML = `
+                    <svg class="icon-svg" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="9 12 12 15 16 10"></polyline>
+                    </svg>
+                    <span>重新上傳</span>
+                `;
+            }
+        }
+
+        // 複製功能
+        copyBtn.addEventListener('click', () => {
+            if (!lastAnalysisText) return;
+            const textarea = document.createElement('textarea');
+            textarea.value = lastAnalysisText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            try {
+                document.execCommand('copy');
+                copyBtn.classList.add('copied');
+                copyText.textContent = '已複製';
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyText.textContent = '複製';
+                }, 2000);
+            } catch (err) {
+                alert('複製失敗，請手動選取複製');
+            }
+            document.body.removeChild(textarea);
+        });
+    </script>
+</body>
+</html>
