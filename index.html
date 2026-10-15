@@ -107,9 +107,10 @@
         }
 
         header {
+            position: relative;
             text-align: center;
             margin-top: 12px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         h1 {
@@ -125,41 +126,102 @@
             font-style: italic;
         }
 
-        /* API Key 區塊 */
-        .key-bar {
+        /* API Key 小按鍵與隱藏面板 */
+        .key-toggle-btn {
+            position: absolute;
+            top: 0;
+            right: 0;
+            min-height: 36px;
+            padding: 6px 12px;
             background: #ffffff;
             border: 1px solid var(--slate-200);
-            border-radius: 14px;
-            padding: 12px 16px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            flex-wrap: wrap;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.03);
-        }
-
-        .key-bar label {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--slate-700);
-            display: flex;
+            border-radius: 20px;
+            color: var(--slate-600);
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
             align-items: center;
             gap: 6px;
-            white-space: nowrap;
+            cursor: pointer;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+            transition: all 0.2s;
         }
 
-        .key-input-wrapper {
-            flex: 1;
-            min-width: 200px;
-            position: relative;
+        .key-toggle-btn:hover {
+            background: var(--slate-100);
+            color: var(--slate-800);
+            border-color: var(--slate-300);
+        }
+
+        .key-popover {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            padding: 16px;
+        }
+
+        .key-popover.active {
+            display: flex;
+        }
+
+        .key-popover-box {
+            background: #ffffff;
+            width: 100%;
+            max-width: 420px;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            animation: popIn 0.18s ease-out;
+        }
+
+        @keyframes popIn {
+            from { transform: scale(0.95); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .key-popover-head {
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+
+        .key-popover-head h3 {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--slate-800);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-close-popover {
+            background: none;
+            border: none;
+            color: var(--slate-400);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-close-popover:hover {
+            color: var(--slate-700);
+            background: var(--slate-100);
         }
 
         .key-input {
             width: 100%;
-            height: 42px;
+            height: 44px;
             padding: 0 12px;
             font-size: 16px;
             border: 1px solid var(--slate-300);
@@ -167,6 +229,7 @@
             background: var(--slate-50);
             color: var(--slate-800);
             outline: none;
+            margin-bottom: 8px;
             transition: border-color 0.15s;
         }
 
@@ -177,9 +240,32 @@
 
         .key-hint {
             font-size: 12px;
-            color: var(--slate-400);
-            width: 100%;
-            margin-top: -4px;
+            color: var(--slate-500);
+            line-height: 1.5;
+            margin-bottom: 16px;
+        }
+
+        .popover-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 8px;
+        }
+
+        .btn-save-key {
+            min-height: 40px;
+            padding: 0 18px;
+            border-radius: 8px;
+            background: var(--blue-600);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .btn-save-key:hover {
+            background: var(--blue-500);
         }
 
         /* 網格佈局 */
@@ -382,23 +468,41 @@
 <body>
     <div class="container">
         <header>
-            <h1>國外發票內容分析器</h1>
-            <p class="subtitle">支援點擊上傳、相簿選取或貼上圖片（Ctrl+V）</p>
-        </header>
-
-        <!-- API Key 設定列 -->
-        <div class="key-bar">
-            <label for="apiKeyInput">
+            <button id="keyToggleBtn" class="key-toggle-btn" type="button" title="金鑰設定">
                 <svg class="icon-svg" style="color:var(--blue-500);" viewBox="0 0 24 24">
                     <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                     <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                 </svg>
-                AI API Key
-            </label>
-            <div class="key-input-wrapper">
-                <input type="password" id="apiKeyInput" class="key-input" placeholder="請填入你的 ak-xxxx" autocomplete="off" />
+                <span>金鑰設定</span>
+            </button>
+            <h1>國外發票內容分析器</h1>
+            <p class="subtitle">支援點擊上傳、相簿選取或貼上圖片（Ctrl+V）</p>
+        </header>
+
+        <!-- API Key 隱藏彈跳視窗 -->
+        <div id="keyPopover" class="key-popover">
+            <div class="key-popover-box">
+                <div class="key-popover-head">
+                    <h3>
+                        <svg class="icon-svg" style="color:var(--blue-500);" viewBox="0 0 24 24">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        AI API Key 設定
+                    </h3>
+                    <button id="closePopoverBtn" class="btn-close-popover" type="button">
+                        <svg class="icon-svg" viewBox="0 0 24 24">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <input type="password" id="apiKeyInput" class="key-input" placeholder="ak-xxxx" autocomplete="off" />
+                <div class="key-hint">已預先綁定金鑰，若需替換成自己的 AI API Key 可於此處更新。</div>
+                <div class="popover-actions">
+                    <button id="saveKeyBtn" class="btn-save-key" type="button">確定</button>
+                </div>
             </div>
-            <div class="key-hint">※ 請在此輸入公司 AI API Key，金鑰僅儲存於記憶體，重開需再填。</div>
         </div>
 
         <div class="main-grid">
@@ -471,7 +575,15 @@
     </div>
 
     <script>
+        const DEFAULT_API_KEY = 'ak-841293c56e59ca75fff0bde797c8460fb436430a964c9e4d';
+        let currentApiKey = DEFAULT_API_KEY;
+
         const apiKeyInput = document.getElementById('apiKeyInput');
+        const keyToggleBtn = document.getElementById('keyToggleBtn');
+        const keyPopover = document.getElementById('keyPopover');
+        const closePopoverBtn = document.getElementById('closePopoverBtn');
+        const saveKeyBtn = document.getElementById('saveKeyBtn');
+
         const dropzone = document.getElementById('dropzone');
         const fileInput = document.getElementById('fileInput');
         const previewImg = document.getElementById('previewImg');
@@ -482,6 +594,30 @@
         const copyText = document.getElementById('copyText');
         const errorBanner = document.getElementById('errorBanner');
         const errorMsg = document.getElementById('errorMsg');
+
+        apiKeyInput.value = currentApiKey;
+
+        keyToggleBtn.addEventListener('click', () => {
+            keyPopover.classList.add('active');
+            apiKeyInput.focus();
+        });
+
+        closePopoverBtn.addEventListener('click', () => {
+            keyPopover.classList.remove('active');
+        });
+
+        saveKeyBtn.addEventListener('click', () => {
+            const val = apiKeyInput.value.trim();
+            currentApiKey = val || DEFAULT_API_KEY;
+            apiKeyInput.value = currentApiKey;
+            keyPopover.classList.remove('active');
+        });
+
+        keyPopover.addEventListener('click', (e) => {
+            if (e.target === keyPopover) {
+                keyPopover.classList.remove('active');
+            }
+        });
 
         let currentFile = null;
         let isProcessing = false;
@@ -567,9 +703,10 @@
         }
 
         async function startAnalysis(file) {
-            const apiKey = apiKeyInput.value.trim();
+            const apiKey = currentApiKey || apiKeyInput.value.trim();
             if (!apiKey) {
-                showError('請先在上方填入你的 AI API Key 後再進行分析');
+                showError('請先點擊右上角「金鑰設定」設定 AI API Key');
+                keyPopover.classList.add('active');
                 apiKeyInput.focus();
                 return;
             }
